@@ -1,82 +1,39 @@
-/* Reset & base */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
 body {
-  height: 100vh;
+  font-family: Arial, sans-serif;
+  background: #f0f2f5;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #74ebd5, #acb6e5);
+  height: 100vh;
+  margin: 0;
 }
 
-/* Card container */
-.container {
-  background: #ffffff;
-  padding: 40px 50px;
-  border-radius: 15px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-  width: 400px;
+.login-container, .home-container {
+  background: #fff;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 0 15px rgba(0,0,0,0.2);
+  width: 300px;
   text-align: center;
 }
 
-/* Headings */
-h1 {
-  margin-bottom: 20px;
-  color: #333;
-}
-
-/* Inputs */
-input[type="text"], input[type="password"], input[type="file"], textarea {
+input[type="text"], input[type="password"], input[type="file"] {
   width: 100%;
-  padding: 12px 15px;
+  padding: 8px;
   margin: 10px 0;
+  border-radius: 5px;
   border: 1px solid #ccc;
-  border-radius: 8px;
-  transition: 0.3s;
 }
 
-input:focus, textarea:focus {
-  border-color: #74ebd5;
-  outline: none;
-}
-
-/* Buttons */
 button {
-  width: 100%;
-  padding: 12px;
+  padding: 10px 15px;
+  background: #007bff;
+  color: #fff;
   border: none;
-  background: #74ebd5;
-  color: white;
-  font-size: 16px;
-  border-radius: 8px;
+  border-radius: 5px;
   cursor: pointer;
-  transition: 0.3s;
 }
 
 button:hover {
-  background: #66d4c2;
-}
-
-/* Links */
-a {
-  display: inline-block;
-  margin-top: 15px;
-  color: #74ebd5;
-  text-decoration: none;
-  transition: 0.3s;
-}
-
-a:hover {
-  text-decoration: underline;
-  color: #66d4c2;
-}
-
-/* Form spacing */
-form {
-  margin-top: 20px;
+  background: #0056b3;
 }

@@ -1,17 +1,52 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Home</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Welcome to Home Page</h1>
-    <form action="/upload" method="POST" enctype="multipart/form-data">
+  <div class="home-container">
+    <h2>Welcome to Home Page</h2>
+
+    <form id="uploadForm" enctype="multipart/form-data">
       <input type="file" name="uploaded_file" required>
       <button type="submit">Upload</button>
     </form>
+
+    <p id="status"></p>
     <a href="/">Logout</a>
   </div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const statusText = document.getElementById('status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(form);
+
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await res.json();
+        console.log(result);
+
+        if (result.success) {
+          statusText.textContent = result.message;
+        } else {
+          statusText.textContent = result.message || 'Upload failed';
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        statusText.textContent = 'Something went wrong.';
+      }
+    });
+  </script>
 </body>
 </html>
