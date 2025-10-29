@@ -1,81 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>File Upload</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #eef2f3;
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .upload-box {
-      background: white;
-      padding: 30px;
-      border-radius: 10px;
-      text-align: center;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      width: 400px;
-    }
-    input {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-    }
-    button {
-      padding: 10px 20px;
-      margin-top: 15px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    button:hover { background-color: #0056b3; }
-  </style>
+  <meta charset="UTF-8">
+  <title>Home - File Upload</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="upload-box">
-    <h2>Upload File</h2>
-    <input type="file" id="fileInput" />
-    <button onclick="uploadFile()">Upload</button>
-    <button onclick="logout()">Logout</button>
-    <p id="msg"></p>
+  <div class="upload-container">
+    <h2>Upload a File</h2>
+    <form id="uploadForm">
+      <input type="file" name="file" id="fileInput" required />
+      <button type="submit">Upload</button>
+    </form>
+    <p id="status"></p>
+    <a href="/logout">Logout</a>
   </div>
 
   <script>
-    async function uploadFile() {
-      const fileInput = document.getElementById("fileInput");
-      const msg = document.getElementById("msg");
+    const uploadForm = document.getElementById("uploadForm");
+    const statusText = document.getElementById("status");
 
-      if (!fileInput.files.length) {
-        msg.textContent = "Please select a file";
-        return;
-      }
+    uploadForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const file = document.getElementById("fileInput").files[0];
+      if (!file) return alert("Please select a file first.");
 
       const formData = new FormData();
-      formData.append("file", fileInput.files[0]);
+      formData.append("file", file);
 
-      const res = await fetch("/upload", {
-        method: "POST",
-        body: formData,
-      });
+      statusText.textContent = "Uploading...";
 
-      const data = await res.json();
-      if (data.success) {
-        msg.innerHTML = `✅ File uploaded successfully! <a href="${data.fileUrl}" target="_blank">View File</a>`;
-      } else {
-        msg.textContent = "❌ Upload failed.";
+      try {
+        const res = await fetch("/upload", {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          statusText.textContent = "✅ " + data.message;
+          console.log("File URL:", data.file_url);
+        } else {
+          statusText.textContent = "❌ " + (data.error || "Upload failed");
+        }
+      } catch (err) {
+        statusText.textContent = "⚠️ Server error: " + err.message;
       }
-    }
-
-    function logout() {
-      window.location.href = "index.html";
-    }
+    });
   </script>
 </body>
 </html>
