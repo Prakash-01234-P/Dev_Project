@@ -1,52 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Home</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>File Upload</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #eef2f3;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .upload-box {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      width: 400px;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 15px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover { background-color: #0056b3; }
+  </style>
 </head>
 <body>
-  <div class="home-container">
-    <h2>Welcome to Home Page</h2>
-
-    <form id="uploadForm" enctype="multipart/form-data">
-      <input type="file" name="uploaded_file" required>
-      <button type="submit">Upload</button>
-    </form>
-
-    <p id="status"></p>
-    <a href="/">Logout</a>
+  <div class="upload-box">
+    <h2>Upload File</h2>
+    <input type="file" id="fileInput" />
+    <button onclick="uploadFile()">Upload</button>
+    <button onclick="logout()">Logout</button>
+    <p id="msg"></p>
   </div>
 
   <script>
-    const form = document.getElementById('uploadForm');
-    const statusText = document.getElementById('status');
+    async function uploadFile() {
+      const fileInput = document.getElementById("fileInput");
+      const msg = document.getElementById("msg");
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const formData = new FormData(form);
-
-      try {
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-
-        const result = await res.json();
-        console.log(result);
-
-        if (result.success) {
-          statusText.textContent = result.message;
-        } else {
-          statusText.textContent = result.message || 'Upload failed';
-        }
-      } catch (err) {
-        console.error('Error:', err);
-        statusText.textContent = 'Something went wrong.';
+      if (!fileInput.files.length) {
+        msg.textContent = "Please select a file";
+        return;
       }
-    });
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+
+      const res = await fetch("/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        msg.innerHTML = `✅ File uploaded successfully! <a href="${data.fileUrl}" target="_blank">View File</a>`;
+      } else {
+        msg.textContent = "❌ Upload failed.";
+      }
+    }
+
+    function logout() {
+      window.location.href = "index.html";
+    }
   </script>
 </body>
 </html>
