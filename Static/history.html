@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Upload History</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      background: #a2d9f0f7;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .upload-container {
+      width: 90%;
+      max-width: 1000px;
+      background: white;
+      padding: 25px 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+    }
+    h2 { text-align: center; margin-bottom: 20px; color: #003c8f; }
+    .table-wrap { overflow-x: auto; max-height: 70vh; border-radius: 8px; }
+    .table { border-collapse: collapse; width: 100%; background: #fff; }
+    .table th, .table td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; }
+    .table th { background: #007bff; color: #fff; position: sticky; top: 0; }
+    .table tr:nth-child(even) { background-color: #f8f9ff; }
+    .btn { background-color: #007bff; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 14px; }
+    .btn:hover { background-color: #0056b3; }
+    .btn-secondary { background-color: #6c757d; color: #fff; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; }
+    .btn-secondary:hover { background-color: #5a6268; }
+    a.link { text-decoration: none; color: #007bff; font-weight: bold; }
+    a.link:hover { text-decoration: underline; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .hidden { display: none; }
+    .modal-content { background: white; width: 90%; max-width: 1100px; border-radius: 10px; padding: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.2); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .modal-header h3 { margin: 0; color: #003c8f; }
+    .toolbar { margin-bottom: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .toolbar input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 5px; }
+    .filter-chip { font-size: 13px; background: #f4f7ff; padding: 4px 8px; border-radius: 4px; border: 1px solid #d0d7ef; }
+    .badge { background: #007bff; color: white; padding: 5px 10px; border-radius: 12px; font-size: 12px; }
+    .modal-footer { margin-top: 10px; display: flex; justify-content: center; align-items: center; gap: 10px; }
+  </style>
+</head>
+<body>
+  <div class="upload-container">
+    <h2>Upload History</h2>
+    <div id="historyWrap" class="table-wrap"></div>
+    <div style="margin-top:15px; text-align:center;">
+      <a class="link" href="/home.html">⬅ Back to Home</a>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">Data</h3>
+        <button id="closeModal" class="btn-secondary">✕</button>
+      </div>
+      <div class="toolbar">
+        <input id="modalGlobalSearch" placeholder="🔍 Search..." />
+        <span id="modalColFilters"></span>
+      </div>
+      <div id="modalTable" class="table-wrap" style="max-height:60vh;"></div>
+      <div class="modal-footer">
+        <button id="prevPage" class="btn-secondary">Prev</button>
+        <span id="pageInfo" class="badge"></span>
+        <button id="nextPage" class="btn-secondary">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const historyWrap = document.getElementById("historyWrap");
+
+    async function loadHistory() {
+      historyWrap.innerHTML = "<p>Loading...</p>";
+      const res = await fetch("/api/uploads");
+      const data = await res.json();
+      if (!data.success) {
+        historyWrap.innerHTML = "<p style='color:red;'>Failed to load history.</p>";
+        return;
+      }
+      renderHistoryTable(data.uploads);
+    }
+
+    function renderHistoryTable(rows) {
+      if (!rows.length) {
+        historyWrap.innerHTML = "<p>No uploads yet.</p>";
+        return;
+      }
+      const thead = `
+        <thead>
+          <tr>
+            <th>ID</th><th>Filename</th><th>Table</th><th>Rows</th><th>Uploaded At</th><th>Action</th>
+          </tr>
+        </thead>`;
+      const tbody = `
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td>${r.id}</td>
+              <td>${escapeHtml(r.filename)}</td>
+              <td>${escapeHtml(r.table_name)}</td>
+              <td>${r.rows_count}</td>
+              <td>${new Date(r.uploaded_at).toLocaleString()}</td>
+              <td><button class="btn" onclick="viewData(${r.id}, '${escapeAttr(r.table_name)}')">View Data</button></td>
+            </tr>
+          `).join("")}
+        </tbody>`;
+      historyWrap.innerHTML = `<table class="table">${thead}${tbody}</table>`;
+    }
+
+    // Modal data state
+    let modalRows = [], modalFiltered = [], modalColumns = [];
+    let page = 0;
+    const pageSize = 200;
+
+    async function viewData(id, tableName) {
+      page = 0;
+      document.getElementById("modalTitle").textContent = `Data: ${tableName}`;
+      showModal();
+      await fetchPage(id, 0);
+    }
+
+    async function fetchPage(id, offset) {
+      document.getElementById("modalTable").innerHTML = "<p>Loading data...</p>";
+      // ✅ Express server route uses /api/uploads/:id/data
+      const res = await fetch(`/api/uploads/${id}/data?offset=${offset}&limit=${pageSize}`);
+      const data = await res.json();
+      if (!data.success) {
+        document.getElementById("modalTable").innerHTML = "<p style='color:red;'>Failed to load data.</p>";
+        return;
+      }
+      modalRows = data.rows;
+      modalFiltered = data.rows.slice();
+      modalColumns = data.columns.length ? data.columns : (data.rows[0] ? Object.keys(data.rows[0]).filter(c=>c!=="id") : []);
+      buildModalFilters();
+      drawModalTable(modalFiltered);
+      document.getElementById("pageInfo").textContent = `Showing ${offset+1}-${offset+modalRows.length} of ${data.total}`;
+      document.getElementById("prevPage").onclick = () => { if (page > 0) { page--; fetchPage(id, page*pageSize); } };
+      document.getElementById("nextPage").onclick = () => { if ((page+1)*pageSize < data.total) { page++; fetchPage(id, page*pageSize); } };
+    }
+
+    function buildModalFilters() {
+      const host = document.getElementById("modalColFilters");
+      host.innerHTML = modalColumns.map(c => `
+        <label class="filter-chip">${escapeHtml(c)}:
+          <input data-col="${c}" class="colFilter" placeholder="filter ${escapeHtml(c)}" />
+        </label>
+      `).join("");
+      document.getElementById("modalGlobalSearch").value = "";
+
+      const apply = () => {
+        const q = document.getElementById("modalGlobalSearch").value.toLowerCase().trim();
+        const colFilters = [...document.querySelectorAll(".colFilter")]
+          .reduce((acc, i) => { acc[i.dataset.col] = i.value.toLowerCase().trim(); return acc; }, {});
+        modalFiltered = modalRows.filter(row => {
+          const globalOK = !q || Object.entries(row).some(([k, v]) => (k==="id" ? false : String(v ?? "").toLowerCase().includes(q)));
+          const colsOK = Object.entries(colFilters).every(([k, v]) => !v || String(row[k] ?? "").toLowerCase().includes(v));
+          return globalOK && colsOK;
+        });
+        drawModalTable(modalFiltered);
+      };
+
+      document.getElementById("modalGlobalSearch").oninput = apply;
+      document.querySelectorAll(".colFilter").forEach(i => i.oninput = apply);
+    }
+
+    function drawModalTable(rows) {
+      const host = document.getElementById("modalTable");
+      if (!rows.length) { host.innerHTML = "<p>No matching rows.</p>"; return; }
+      const cols = modalColumns;
+      const thead = `<thead><tr>${cols.map(c=>`<th>${escapeHtml(c)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${rows.map(r => `<tr>${cols.map(c => `<td>${escapeHtml(r[c])}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      host.innerHTML = `<table class="table">${thead}${tbody}</table>`;
+    }
+
+    function showModal(){ document.getElementById("modal").classList.remove("hidden"); }
+    function hideModal(){ document.getElementById("modal").classList.add("hidden"); }
+    document.getElementById("closeModal").onclick = hideModal;
+    window.addEventListener("keydown", (e)=>{ if(e.key==="Escape") hideModal(); });
+
+    function escapeHtml(x){ return String(x ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[s])); }
+    function escapeAttr(x){ return String(x ?? "").replace(/['"]/g, "_"); }
+
+    // init
+    loadHistory();
+  </script>
+</body>
+</html>

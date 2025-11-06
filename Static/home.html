@@ -1,24 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Home - File Upload</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Page polish to match history.html */
+    body {
+      background: #b7dde8f5;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .upload-container {
+      width: 90%;
+      max-width: 1000px;
+      background: #edeae5fa;
+      padding: 25px 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    h2 { text-align: center; margin: 0 0 16px; color: #003c8f; }
+    form { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+    #status { text-align: center; margin-top: 10px; }
+    .table-wrap { margin-top: 14px; max-height: 70vh; overflow: auto; border-radius: 8px; }
+    .table { width: 100%; border-collapse: collapse; background: #ffffff; }
+    .table th, .table td { border: 1px solid #e5ebebc4; padding: 8px 20px; text-align: left; }
+    .table thead th { position: sticky; top: 0; background: #5b95ce; color: #ffffff; z-index: 1; }
+    .table tbody tr:nth-child(even) { background: #f8f9ff; }
+    .toolbar { display: none; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+    .toolbar input { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; }
+    .filter-chip { font-size: 13px; background: #f4f7ff; padding: 4px 8px; border-radius: 6px; border: 1px solid #d0d7ef; display: inline-flex; gap: 6px; align-items: center; }
+    .badge { display: inline-block; margin-left: 6px; background: #e2e5f5; color: #0b6b2b; border: 1px solid #a8e2ba; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+    .link { color: #72aae2; text-decoration: none; }
+    .link:hover { text-decoration: underline; }
+    .actions { margin-top: 12px; text-align: center; }
+    .muted { color: #b41515; }
+  </style>
 </head>
 <body>
   <div class="upload-container">
-    <h2>Upload a file</h2>
+    <h2>Upload a File</h2>
+
     <form id="uploadForm">
-      <input type="file" name="file" id="fileInput" required />
-      <button type="submit">Upload</button>
+      <input type="file" name="file" id="fileInput" accept=".xlsx,.xls,.csv" required />
+      <button id="btnUpload" type="submit">Upload</button>
+      <span class="muted">Supported: .xlsx / .xls / .csv</span>
     </form>
+
     <p id="status"></p>
-    <a href="/logout">Logout</a>
+
+    <div class="toolbar" id="tableTools">
+      <input id="globalSearch" placeholder="Search all columns..." />
+      <span id="colFilters"></span>
+    </div>
+
+    <div class="table-wrap" id="tableWrap"></div>
+
+    <div class="actions">
+      <a class="link" href="/history.html">View History</a> |
+      <a class="link" href="/logout">Logout</a>
+    </div>
   </div>
 
   <script>
     const uploadForm = document.getElementById("uploadForm");
     const statusText = document.getElementById("status");
+    const btnUpload = document.getElementById("btnUpload");
+    const tableTools = document.getElementById("tableTools");
+    const tableWrap = document.getElementById("tableWrap");
+
+    let originalRows = [];
+    let filteredRows = [];
 
     uploadForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -28,25 +82,94 @@
       const formData = new FormData();
       formData.append("file", file);
 
+      btnUpload.disabled = true;
+      btnUpload.textContent = "Uploading...";
       statusText.textContent = "Uploading...";
 
       try {
-        const res = await fetch("/upload", {
-          method: "POST",
-          body: formData
-        });
-        const data = await res.json();
+        const res = await fetch("/upload", { method: "POST", body: formData });
+        // If server returned HTML (error page), guard against JSON parse error:
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch {
+          throw new Error("Unexpected response from server.");
+        }
 
         if (data.success) {
-          statusText.textContent = "✅ " + data.message;
-          console.log("File URL:", data.file_url);
+          statusText.innerHTML = `✅ ${escapeHtml(data.message)}
+            ${data.file_url ? ` - <a href="${data.file_url}" target="_blank">View File</a>` : ""} 
+            <span class="badge">Rows: ${data.rowsCount}</span>
+            <span class="badge">Table: ${escapeHtml(data.tableName)}</span>`;
+
+          setupTable(data.preview);
         } else {
           statusText.textContent = "❌ " + (data.error || "Upload failed");
+          tableWrap.innerHTML = "";
+          tableTools.style.display = "none";
         }
       } catch (err) {
-        statusText.textContent = "⚠️ Server error: " + err.message;
+        statusText.textContent = "⚠️ " + err.message;
+        tableWrap.innerHTML = "";
+        tableTools.style.display = "none";
+      } finally {
+        btnUpload.disabled = false;
+        btnUpload.textContent = "Upload";
       }
     });
+
+    function setupTable(rows) {
+      if (!rows || rows.length === 0) {
+        tableWrap.innerHTML = "<p>No preview rows.</p>";
+        tableTools.style.display = "none";
+        return;
+      }
+      originalRows = rows;
+      filteredRows = rows.slice();
+      drawTable(filteredRows);
+      buildFilters(Object.keys(rows[0]));
+      tableTools.style.display = "flex";
+    }
+
+    function drawTable(rows) {
+      if (!rows || rows.length === 0) {
+        tableWrap.innerHTML = "<p>No matching rows.</p>";
+        return;
+      }
+      const cols = Object.keys(rows[0]);
+      const thead = `<thead><tr>${cols.map(c=>`<th>${escapeHtml(c)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${escapeHtml(r[c])}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      tableWrap.innerHTML = `<table class="table">${thead}${tbody}</table>`;
+    }
+
+    function buildFilters(columns) {
+      const filtersHost = document.getElementById("colFilters");
+      filtersHost.innerHTML = columns.map(c => `
+        <label class="filter-chip">
+          ${escapeHtml(c)}: <input data-col="${c}" class="colFilter" placeholder="filter ${escapeHtml(c)}" />
+        </label>
+      `).join("");
+
+      document.getElementById("globalSearch").value = "";
+
+      const apply = () => {
+        const q = document.getElementById("globalSearch").value.toLowerCase().trim();
+        const colFilters = [...document.querySelectorAll(".colFilter")]
+          .reduce((acc, i) => { acc[i.dataset.col] = i.value.toLowerCase().trim(); return acc; }, {});
+        filteredRows = originalRows.filter(row => {
+          const globalOK = !q || Object.values(row).some(v => String(v ?? "").toLowerCase().includes(q));
+          const colsOK = Object.entries(colFilters).every(([k, v]) => !v || String(row[k] ?? "").toLowerCase().includes(v));
+          return globalOK && colsOK;
+        });
+        drawTable(filteredRows);
+      };
+
+      document.getElementById("globalSearch").oninput = apply;
+      document.querySelectorAll(".colFilter").forEach(i => i.oninput = apply);
+    }
+
+    function escapeHtml(x) {
+      return String(x ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;","<":"&lt;"," >":"&gt;","\"":"&quot;" }[s]));
+    }
   </script>
 </body>
 </html>
